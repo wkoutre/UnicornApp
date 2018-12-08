@@ -12,8 +12,6 @@ import { ButtonStyles, ButtonTextStyles } from "@styles";
 
 const AUDIO_URL = `http://otrrlibrary.org/OTRRLib/Library%20Files/A%20Series/Agatha%20Christie%201/Poirots%20Christmas/AgathaChristie___PoirotsChristmas_Pt1.mp3`;
 
-console.log(`TrackPlayer:`, TrackPlayer);
-
 const TRACK_STATE_MAP = {
   0: "stopped",
   1: "stopped",
@@ -57,11 +55,9 @@ class XAudioScreen extends React.PureComponent<
   IAudioScreenState
 > {
   _translateTimer: number = 0;
-  _animatedTranslate1: Animated.Value = new Animated.Value(0);
-  _animatedTranslate2: Animated.Value = new Animated.Value(0 - UNICORN_OFFSET);
-  _animatedTranslate3: Animated.Value = new Animated.Value(
-    0 - UNICORN_OFFSET * 2
-  );
+  _animatedTranslate1: Animated.Value = new Animated.Value(UNICORN_OFFSET);
+  _animatedTranslate2: Animated.Value = new Animated.Value(UNICORN_OFFSET * 2);
+  _animatedTranslate3: Animated.Value = new Animated.Value(UNICORN_OFFSET * 3);
 
   static navigationOptions = ({
     navigation
@@ -239,8 +235,6 @@ class XAudioScreen extends React.PureComponent<
 
   private getUnicornStyle = (n: number) => {
     const translateVal = this[`_animatedTranslate${n}`];
-
-    console.log(`translateVal for ${n}`, translateVal);
 
     return [localStyles.unicorn, { transform: [{ translateX: translateVal }] }];
   };

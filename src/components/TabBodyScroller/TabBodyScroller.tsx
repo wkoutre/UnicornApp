@@ -10,6 +10,7 @@ import {
   PanResponderGestureState,
   NativeSyntheticEvent,
   LayoutChangeEvent,
+  FlatList,
 } from "react-native";
 import {
   CommonStyles,
@@ -40,32 +41,39 @@ const localStyles = StyleSheet.create({
   },
   bodyContainer: {
     flex: 1,
+    // height: "100%",
+    // width: "100%",
     backgroundColor: "orange",
+  },
+  bodyContentContainer: {
+    flex: 1,
+    backgroundColor: "green",
+    // height: "100%",
+    // width: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
   commonCard: {
-    position: "absolute",
+    backgroundColor: "purple",
+    // position: "absolute",
+    // flex: 1,
     height: "100%",
     width: "100%",
   },
-  tabContainer: {
-    marginLeft: TAB_CONT_MARGIN_LEFT,
-  },
+  tabContainer: {},
   tabBorder: {
-    position: "absolute",
-    bottom: -4,
-    zIndex: 2,
-    left: TAB_MARGIN_LEFT + 107 + 24,
-    height: 4,
+    // position: "absolute",
+    // bottom: -4,
+    // zIndex: 2,
+    // left: TAB_MARGIN_LEFT + 107 + 24,
+    // height: 4,
   },
   header: {
-    borderBottomWidth: 2,
-    borderBottomColor: "rgba(255, 255, 255, 0.25)",
-    flexDirection: "row",
-    zIndex: 1,
-    backgroundColor: "black",
-    // if we want to blur/have opacity, need to adjust layout such that it's absolutely positioned at the top, giving the featured image a marginTop
+    // borderBottomWidth: 2,
+    // borderBottomColor: "rgba(255, 255, 255, 0.25)",
+    // flexDirection: "row",
+    // zIndex: 1,
+    // backgroundColor: "black",
   },
   firstTab: {
     marginLeft: 2,
@@ -247,7 +255,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   //     }
   //   }
 
-  getXPreventOverflow = (
+  private getXPreventOverflow = (
     x: number,
     divisor: number,
     fromTab: boolean,
@@ -306,7 +314,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return x;
   };
 
-  getTabXFromBodyPan = ({
+  private getTabXFromBodyPan = ({
     bodyX: dx,
     bodyY: y,
   }: {
@@ -390,7 +398,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   //     }
   //   };
 
-  getBodyXFromTabPan = ({
+  private getBodyXFromTabPan = ({
     tabX: dx,
     tabY: y,
   }: {
@@ -423,7 +431,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     };
   };
 
-  handleTabLayout = (
+  private handleTabLayout = (
     {
       nativeEvent: {
         layout: { width },
@@ -529,7 +537,10 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     );
   };
 
-  onSwipeComplete = (direction: string, reset: boolean = false): void => {
+  private onSwipeComplete = (
+    direction: string,
+    reset: boolean = false,
+  ): void => {
     const { index } = this.state;
     const tabX = reset ? 0 : this.getTabXFromIndex(index, direction);
     let newIndex = index;
@@ -550,10 +561,12 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       }
     }
 
+    console.log(`newIndex:`, newIndex);
+
     this.setState({ swipeEnabled: true, index: newIndex });
   };
 
-  getBorderProps = () => {
+  private getBorderProps = () => {
     const {
       tabTextWidthsInit,
       tabTextWidthAccSumsPos,
@@ -591,7 +604,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return { width, backgroundColor };
   };
 
-  getBodyStyle = (i: number) => {
+  private getBodyStyle = (i: number) => {
     const { index } = this.state;
 
     const isActive = i === index;
@@ -617,7 +630,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     };
   };
 
-  getTabContainerStyle = (): {
+  private getTabContainerStyle = (): {
     transform: Array<{
       translateX: Animated.AnimatedInterpolation;
     }>;
@@ -639,7 +652,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     };
   };
 
-  handleSettingTabPosition = (
+  private handleSettingTabPosition = (
     _: NativeSyntheticEvent<any>,
     gesture: PanResponderGestureState,
   ): void => {
@@ -662,7 +675,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     }
   };
 
-  handleSettingPosition = (
+  private handleSettingPosition = (
     _event: NativeSyntheticEvent<any>,
     gesture: PanResponderGestureState,
   ): void => {
@@ -679,7 +692,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     }
   };
 
-  forceSwipe = (direction: string, xMultiplier: number = 1): void => {
+  private forceSwipe = (direction: string, xMultiplier: number = 1): void => {
     const { index, tabTextWidthAccSumsPos } = this.state;
     const { content } = this.props;
 
@@ -743,7 +756,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     });
   };
 
-  getTabXFromIndex = (indexArg: number, direction: string): number => {
+  private getTabXFromIndex = (indexArg: number, direction: string): number => {
     const isRight = direction === "right";
     const index = indexArg > 0 && isRight ? indexArg - 1 : indexArg + 1;
     const marginConstant = index * TAB_MARGIN_LEFT * -1;
@@ -770,7 +783,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return tabX;
   };
 
-  resetPosition = (): void => {
+  private resetPosition = (): void => {
     console.log(`Resetting position.`);
     const { index } = this.state;
 
@@ -791,7 +804,32 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     Animated.parallel([bodyReset, tabReset, globalTabXReset]).start();
   };
 
-  renderBodys = (): React.ReactNodeArray => {
+  private renderBodyItem = ({ item, index: itemIndex }) => {
+    const { index } = this.state;
+
+    const offset = WIDTH * (itemIndex - index);
+
+    const activeProps =
+      itemIndex === index ? this._bodyPanResponder.panHandlers : {};
+
+    return (
+      <Animated.View
+        key={itemIndex}
+        {...activeProps}
+        style={[
+          this.getBodyStyle(itemIndex),
+          localStyles.commonCard,
+          {
+            left: offset,
+          },
+        ]}
+      >
+        {this.props.renderBodyItem(item, itemIndex)}
+      </Animated.View>
+    );
+  };
+
+  private renderBodys = (): React.ReactNodeArray => {
     const { index } = this.state;
     const { content } = this.props;
 
@@ -821,7 +859,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       .reverse();
   };
 
-  handleSwipeToStart = (): void => {
+  private handleSwipeToStart = (): void => {
     const { index } = this.state;
 
     const x = WIDTH * index;
@@ -854,7 +892,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     );
   };
 
-  handleTabPress = (index: number): void => {
+  private handleTabPress = (index: number): void => {
     console.log(
       `handling tab press for index ${index}. Might need to fix this for delta > 1`,
     );
@@ -875,7 +913,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     this.forceSwipe("left", diff);
   };
 
-  getTextStyle = (i: number) => {
+  private getTextStyle = (i: number) => {
     const {
       tabTextWidthsInit,
       tabTextWidthAccSumsPos,
@@ -915,7 +953,11 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return { color, opacity };
   };
 
+  private bodyKeyExtractor = (_item, index: number) => `body-item-${index}`;
+
   render(): React.ReactNode {
+    const { index } = this.state;
+
     return (
       <View style={localStyles.container}>
         {/* <TabBodyScrollerHeader
@@ -930,7 +972,17 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
             panResponder={this._tabPanResponder}
             index={this._index}
           /> */}
-        <View style={localStyles.bodyContainer}>{this.renderBodys()}</View>
+        <FlatList
+          extraData={index}
+          horizontal={true}
+          scrollEnabled={false}
+          style={localStyles.bodyContainer}
+          contentContainerStyle={localStyles.bodyContentContainer}
+          data={this.props.content}
+          renderItem={this.renderBodyItem}
+          keyExtractor={this.bodyKeyExtractor}
+        />
+        {/* <View style={localStyles.bodyContainer}>{this.renderBodys()}</View> */}
       </View>
     );
   }

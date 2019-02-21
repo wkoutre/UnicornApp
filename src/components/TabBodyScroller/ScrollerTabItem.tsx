@@ -26,12 +26,11 @@ class ScrollerTabItem extends React.Component<IScrollerTabItemProps, {}> {
     const { title, i, getTextStyle } = this.props;
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={this.handleTabPress}
-        onLayout={this.handleTabLayout}
-      >
-        <Animated.Text style={[getTextStyle(i), { backgroundColor: "violet" }]}>
+      <TouchableOpacity activeOpacity={0.7} onPress={this.handleTabPress}>
+        <Animated.Text
+          onLayout={this.handleTabLayout}
+          style={[getTextStyle(i), { backgroundColor: "violet" }]}
+        >
           {title}
         </Animated.Text>
       </TouchableOpacity>

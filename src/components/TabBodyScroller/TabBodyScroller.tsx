@@ -8,6 +8,7 @@ import {
   PanResponderInstance,
   PanResponderGestureState,
   NativeSyntheticEvent,
+  TextStyle,
 } from "react-native";
 import { WIDTH } from "react-native-common-lib";
 import { dummyData } from "./dummyData";
@@ -41,6 +42,28 @@ const localStyles = StyleSheet.create({
   },
 });
 
+interface ITabBodyScrollerProps<IContentItem> {
+  titles: string[];
+  content: IContentItem[];
+  activeColors: string[];
+  inactiveColors: string[];
+  tabMarginHorizontal: number;
+  renderBodyItem: (contentItem: IContentItem, index: number) => React.ReactNode;
+  getTabStyle: (index: number, tabWidth: number, titles: string[]) => TextStyle;
+}
+
+interface ITabBodyScrollerState {
+  swipeEnabled: boolean;
+  tabTextWidthsInit: boolean;
+  tabTextWidths: number[];
+  colorOutputRanges: string[][];
+  opacityOutputRanges: number[][];
+  tabTextWidthAccSumsPos: number[];
+  tabTextWidthAccSums: number[];
+  tabTextWidthsSumNeg: number;
+  index: number;
+}
+
 /*
   tslint:disable:interface-name
 */
@@ -60,18 +83,6 @@ interface TabBodyScroller<IContentItem> {
   _tabPanResponder: PanResponderInstance;
 }
 
-interface ITabBodyScrollerState {
-  swipeEnabled: boolean;
-  tabTextWidthsInit: boolean;
-  tabTextWidths: number[];
-  colorOutputRanges: string[][];
-  opacityOutputRanges: number[][];
-  tabTextWidthAccSumsPos: number[];
-  tabTextWidthAccSums: number[];
-  tabTextWidthsSumNeg: number;
-  index: number;
-}
-
 class TabBodyScroller<IContentItem> extends React.PureComponent<
   ITabBodyScrollerProps<IContentItem>,
   ITabBodyScrollerState
@@ -81,6 +92,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     content: dummyData.content,
     activeColors: dummyData.activeColors,
     inactiveColors: dummyData.inactiveColors,
+    tabMarginHorizontal: 30,
     renderBodyItem,
     getTabStyle,
   };
@@ -130,10 +142,6 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       onPanResponderMove: (_, gesture) => {
         const { tabTextWidthAccSumsPos } = this.state;
         const tabX = this.getXPreventOverflow(gesture.dx, 5000, true);
-
-        // console.log(`tabX from TAB`, tabX);
-        // console.log(`tabX from pan move:`, tabX);
-
         const bodyX = this.getBodyXFromTabPan(tabX);
 
         /*
@@ -153,6 +161,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
           globalAnimX <
             tabTextWidthAccSumsPos[tabTextWidthAccSumsPos.length - 1]
         ) {
+          console.log(`Setting this._animGlobalTabX to ${globalAnimX}`);
           this._animGlobalTabX.setValue(globalAnimX);
         }
 
@@ -352,8 +361,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   //   };
 
   private getBodyXFromTabPan = (tabX: number): number => {
-    // console.log(`dx from tab:`, dx);
-    const { tabTextWidthsInit, tabTextWidths, index } = this.state;
+    const { tabTextWidthsInit, index, tabTextWidthAccSumsPos } = this.state;
 
     if (!tabTextWidthsInit) {
       return tabX;
@@ -361,18 +369,22 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
 
     const relevantTabWidth =
       tabX < 0
-        ? tabTextWidths[index]
-        : tabTextWidths[index - 1] || tabTextWidths[index];
-    const widthToConsider = relevantTabWidth;
+        ? tabTextWidthAccSumsPos[index + 1]
+        : tabTextWidthAccSumsPos[index] || tabTextWidthAccSumsPos[index + 1];
 
-    console.log(`widthToConsider`, widthToConsider);
+    console.log(`relevantTabWidth`, relevantTabWidth);
+    console.log(`this._globalTabX:`, this._globalTabX);
+    const animTabXVal = this._animGlobalTabX;
+
+    console.log(`animTabXVal:`, animTabXVal);
+
     // console.log(`dx is`, dx);
 
-    const x = (WIDTH / widthToConsider) * tabX;
+    const bodyX = (WIDTH / relevantTabWidth) * tabX;
 
-    console.log(`bodyX:`, x);
+    console.log(`bodyX from tabX of ${tabX}:`, bodyX);
 
-    return x;
+    return bodyX;
   };
 
   private handleTabLayout = (
@@ -385,7 +397,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     },
     index: number,
   ): void => {
-    const { content } = this.props;
+    const { content, tabMarginHorizontal } = this.props;
 
     this._tabTextWidths[index] = width;
 
@@ -400,14 +412,19 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       const initialTabTextWidths = [...this._tabTextWidths];
 
       initialTabTextWidths.forEach((num, i) => {
-        this._tabTextWidthSumNeg -= num;
+        console.log(`this._tabTextWidthSumNeg:`, this._tabTextWidthSumNeg);
+        const nextWidth =
+          i === initialTabTextWidths.length - 1
+            ? 0
+            : initialTabTextWidths[i + 1] / 2;
+
+        this._tabTextWidthSumNeg -=
+          num / 2 + tabMarginHorizontal * 2 + nextWidth;
 
         if (i < initialTabTextWidths.length - 1) {
-          this._tabTextWidthAccSums.push(this._tabTextWidthSumNeg * (i + 1));
+          this._tabTextWidthAccSums.push(this._tabTextWidthSumNeg);
 
-          this._tabTextWidthAccSumsPos.push(
-            -this._tabTextWidthSumNeg * (i + 1),
-          );
+          this._tabTextWidthAccSumsPos.push(-this._tabTextWidthSumNeg);
         }
       });
 
@@ -481,12 +498,12 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   private onSwipeComplete = (
     direction: string,
     reset: boolean = false,
-    xMultipler: number = 1,
+    xMultiplier: number = 1,
   ): void => {
     const { index } = this.state;
     const tabX = reset
       ? 0
-      : this.getTabXFromIndex(index, direction, xMultipler);
+      : this.getTabXFromIndex(index, direction, xMultiplier);
     let newIndex = index;
 
     console.log(`Completing swipe. Setting tab container to x: ${tabX}`);
@@ -497,10 +514,10 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       newIndex = 0;
     } else {
       if (direction === "left") {
-        newIndex += 1 * xMultipler;
+        newIndex += 1 * xMultiplier;
       } else {
         if (newIndex > 0) {
-          newIndex -= 1 * xMultipler;
+          newIndex -= 1 * xMultiplier;
         }
       }
     }
@@ -696,28 +713,41 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   private getTabXFromIndex = (
     indexArg: number,
     direction: string,
-    xMultipler: number = 1,
+    xMultiplier: number = 1,
   ): number => {
-    const { tabTextWidths, tabTextWidthsInit } = this.state;
+    const {
+      tabTextWidths,
+      tabTextWidthsInit,
+      tabTextWidthAccSums,
+    } = this.state;
+
+    if (console.groupCollapsed) {
+      console.groupCollapsed("getTabXFromIndex");
+      console.log("indexArg:", indexArg);
+      console.log(`direction:`, direction);
+      console.log("xMultiplier:", xMultiplier);
+      console.groupEnd();
+    }
 
     const isRight = direction === "right";
     const index =
       indexArg > 0 && isRight
-        ? indexArg - 1 * xMultipler
-        : indexArg + 1 * xMultipler;
+        ? (indexArg - 1) * xMultiplier
+        : (indexArg + 1) * xMultiplier;
 
     if (!tabTextWidthsInit) {
       return 0;
     }
 
-    let tabX = 0;
+    const tabX = tabTextWidthAccSums[index];
+    // let tabX = 0;
 
-    for (let i = 0; i < index; i += 1) {
-      tabX -= tabTextWidths[i];
-    }
+    // for (let i = 0; i < index; i += 1) {
+    //   tabX -= tabTextWidths[i];
+    // }
 
-    console.log(`tabX return val:`, tabX);
-    console.log(`this._globalTabX before it is ${tabX}: ${this._globalTabX}`);
+    // console.log(`tabX return val:`, tabX);
+    // console.log(`this._globalTabX before it is ${tabX}: ${this._globalTabX}`);
 
     this._globalTabX = tabX;
 
@@ -839,6 +869,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       colorOutputRanges,
       opacityOutputRanges,
     } = this.state;
+    const { titles, tabMarginHorizontal } = this.props;
 
     if (!tabTextWidthsInit) {
       return {
@@ -872,8 +903,8 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     });
 
     return [
-      this.props.getTabStyle(i, tabTextWidths[i], tabTextWidths),
-      { color, opacity },
+      this.props.getTabStyle(i, tabTextWidths[i], titles),
+      { color, opacity, marginHorizontal: tabMarginHorizontal },
     ];
   };
 

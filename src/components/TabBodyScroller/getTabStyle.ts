@@ -7,8 +7,6 @@ const localStyles = StyleSheet.create<{
     fontWeight: "600",
     fontSize: 14,
     fontFamily: "System",
-
-    marginHorizontal: 30,
   },
 });
 

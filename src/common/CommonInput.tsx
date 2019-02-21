@@ -272,12 +272,8 @@ class CommonInput extends React.Component<
 
     let isValid: boolean = true;
 
-    if (!hasFocused) {
-      return true;
-    }
-
-    if (!isRequired || !hasFocused) {
-      return true;
+    if (!hasFocused || !isRequired) {
+      return isValid;
     }
 
     if (isPassword) {

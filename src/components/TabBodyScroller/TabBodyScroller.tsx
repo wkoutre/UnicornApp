@@ -1,6 +1,5 @@
 import * as React from "react";
 import { isEqual } from "underscore";
-import { NavigationScreenProps } from "react-navigation";
 import {
   View,
   StyleSheet,
@@ -9,22 +8,13 @@ import {
   PanResponderInstance,
   PanResponderGestureState,
   NativeSyntheticEvent,
-  LayoutChangeEvent,
 } from "react-native";
-import {
-  CommonStyles,
-  WIDTH,
-  // defaultScrollViewProps,
-} from "react-native-common-lib";
+import { WIDTH } from "react-native-common-lib";
 import { dummyData } from "./dummyData";
 import { renderBodyItem } from "./renderBodyItem";
-import {
-  ICoordinates,
-  ITabBodyScrollerProps,
-} from "./tabBodyScrollerInterfaces";
-
-const TAB_MARGIN_LEFT: number = 16;
-const TAB_CONT_MARGIN_LEFT: number = 8; // There is 24px to the left of the tabTitle in the first "position" next to Logo
+import { TabBodyScrollerHeader } from "./TabBodyScrollerHeader";
+import { ITabBodyScrollerProps } from "./tabBodyScrollerInterfaces";
+import { getTabStyle } from "./getTabStyle";
 
 const X_SWIPE_THRESHOLD_COEFF: number = 0.5;
 const SWIPE_THRESHOLD: number = WIDTH * X_SWIPE_THRESHOLD_COEFF;
@@ -49,27 +39,6 @@ const localStyles = StyleSheet.create({
     height: "100%",
     width: "100%",
   },
-  tabContainer: {
-    marginLeft: TAB_CONT_MARGIN_LEFT,
-  },
-  tabBorder: {
-    position: "absolute",
-    bottom: -4,
-    zIndex: 2,
-    left: TAB_MARGIN_LEFT + 107 + 24,
-    height: 4,
-  },
-  header: {
-    borderBottomWidth: 2,
-    borderBottomColor: "rgba(255, 255, 255, 0.25)",
-    flexDirection: "row",
-    zIndex: 1,
-    backgroundColor: "black",
-    // if we want to blur/have opacity, need to adjust layout such that it's absolutely positioned at the top, giving the featured image a marginTop
-  },
-  firstTab: {
-    marginLeft: 2,
-  },
 });
 
 /*
@@ -85,8 +54,8 @@ interface TabBodyScroller<IContentItem> {
   _colorOutputRanges: string[][];
   _opacityOutputRanges: number[][];
   _animGlobalTabX: Animated.Value;
-  _bodyPosition: Animated.ValueXY;
-  _tabPosition: Animated.ValueXY;
+  _bodyPosition: Animated.Value;
+  _tabPosition: Animated.Value;
   _bodyPanResponder: PanResponderInstance;
   _tabPanResponder: PanResponderInstance;
 }
@@ -113,6 +82,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     activeColors: dummyData.activeColors,
     inactiveColors: dummyData.inactiveColors,
     renderBodyItem,
+    getTabStyle,
   };
 
   constructor(props: ITabBodyScrollerProps<IContentItem>) {
@@ -139,11 +109,64 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     this._colorOutputRanges = [];
     this._opacityOutputRanges = [];
     this._animGlobalTabX = new Animated.Value(0);
-    this._bodyPosition = new Animated.ValueXY({ x: 0, y: 0 });
-    this._tabPosition = new Animated.ValueXY({ x: 0, y: 0 });
+    this._bodyPosition = new Animated.Value(0);
+    this._tabPosition = new Animated.Value(0);
 
     // this.buildColorAndOpacityArrs();
 
+    /*
+     *
+     * Create tab pan responder
+     *
+     */
+
+    this._tabPanResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        // return true if user is swiping, return false if it's a single click
+
+        return !(gesture.dx === 0 && gesture.dy === 0);
+      },
+      onPanResponderMove: (_, gesture) => {
+        const { tabTextWidthAccSumsPos } = this.state;
+        const tabX = this.getXPreventOverflow(gesture.dx, 5000, true);
+
+        // console.log(`tabX from TAB`, tabX);
+        // console.log(`tabX from pan move:`, tabX);
+
+        const bodyX = this.getBodyXFromTabPan(tabX);
+
+        /*
+        For if we want to enable tab flick-scrolling OR pan scrolling more than (this._index +- 1)
+
+        const { x: bodyX, y: bodyY } = this.getBodyXFromTabPan({
+          tabX: gesture.dx,
+          tabY,
+        });
+      */
+
+        const globalAnimX = tabX * -1 + this._globalTabX * -1;
+        // console.log(`global anim X val is:`, globalAnimX);
+
+        if (
+          globalAnimX > 0 &&
+          globalAnimX <
+            tabTextWidthAccSumsPos[tabTextWidthAccSumsPos.length - 1]
+        ) {
+          this._animGlobalTabX.setValue(globalAnimX);
+        }
+
+        this._tabPosition.setValue(tabX + this._globalTabX);
+        this._bodyPosition.setValue(bodyX);
+      },
+      onPanResponderRelease: this.handleSettingTabPosition,
+    });
+
+    /*
+     *
+     * Create body pan responder
+     *
+     */
     this._bodyPanResponder = PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_event, gesture) => {
@@ -161,10 +184,9 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       },
       onPanResponderMove: (_event, gesture) => {
         const { tabTextWidthAccSumsPos } = this.state;
-        const { dy: bodyY } = gesture;
         const bodyX = this.getXPreventOverflow(gesture.dx, 1500, false);
 
-        const { x: tabX, y: tabY } = this.getTabXFromBodyPan({ bodyX, bodyY });
+        const tabX = this.getTabXFromBodyPan(bodyX);
 
         // console.log(`tabX from BODY`, tabX);
 
@@ -179,59 +201,10 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
           this._animGlobalTabX.setValue(globalAnimX);
         }
 
-        this._tabPosition.setValue({ x: tabX, y: tabY });
-        this._bodyPosition.setValue({ x: bodyX, y: bodyY });
+        this._tabPosition.setValue(tabX);
+        this._bodyPosition.setValue(bodyX);
       },
       onPanResponderRelease: this.handleSettingPosition,
-    });
-
-    this._tabPanResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => {
-        // return true if user is swiping, return false if it's a single click
-
-        return !(gesture.dx === 0 && gesture.dy === 0);
-      },
-      onPanResponderMove: (_, gesture) => {
-        const { tabTextWidthAccSumsPos } = this.state;
-        const { dy: tabY } = gesture;
-        const tabX = this.getXPreventOverflow(gesture.dx, 5000, true);
-
-        // console.log(`tabX from TAB`, tabX);
-        // console.log(`tabX from pan move:`, tabX);
-
-        const { x: bodyX, y: bodyY } = this.getBodyXFromTabPan({
-          tabX,
-          tabY,
-        });
-
-        /*
-          For if we want to enable tab flick-scrolling OR pan scrolling more than (this._index +- 1)
-
-          const { x: bodyX, y: bodyY } = this.getBodyXFromTabPan({
-            tabX: gesture.dx,
-            tabY,
-          });
-        */
-
-        const globalAnimX = tabX * -1 + this._globalTabX * -1;
-        // console.log(`global anim X val is:`, globalAnimX);
-
-        if (
-          globalAnimX > 0 &&
-          globalAnimX <
-            tabTextWidthAccSumsPos[tabTextWidthAccSumsPos.length - 1]
-        ) {
-          this._animGlobalTabX.setValue(globalAnimX);
-        }
-
-        this._tabPosition.setValue({
-          x: tabX + this._globalTabX,
-          y: tabY,
-        });
-        this._bodyPosition.setValue({ x: bodyX, y: bodyY });
-      },
-      onPanResponderRelease: this.handleSettingTabPosition,
     });
   }
 
@@ -247,7 +220,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   //     }
   //   }
 
-  getXPreventOverflow = (
+  private getXPreventOverflow = (
     x: number,
     divisor: number,
     fromTab: boolean,
@@ -306,34 +279,22 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return x;
   };
 
-  getTabXFromBodyPan = ({
-    bodyX: dx,
-    bodyY: y,
-  }: {
-    bodyX: number;
-    bodyY: number;
-  }): ICoordinates => {
+  private getTabXFromBodyPan = (bodyX: number): number => {
     const { tabTextWidthsInit, tabTextWidths, index } = this.state;
 
     if (!tabTextWidthsInit) {
-      return {
-        x: dx,
-        y,
-      };
+      return bodyX;
     }
 
     const relevantTabWidth =
-      dx < 0
+      bodyX < 0
         ? tabTextWidths[index]
         : tabTextWidths[index - 1] || tabTextWidths[index];
-    const widthToConsider = TAB_MARGIN_LEFT + relevantTabWidth;
+    const widthToConsider = relevantTabWidth;
 
-    const x = (widthToConsider / WIDTH) * dx + this._globalTabX;
+    const x = (widthToConsider / WIDTH) * bodyX + this._globalTabX;
 
-    return {
-      x,
-      y,
-    };
+    return x;
   };
 
   //   getDynamicTabWidth = (startIndex: number, dx: number) => {
@@ -390,40 +351,31 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
   //     }
   //   };
 
-  getBodyXFromTabPan = ({
-    tabX: dx,
-    tabY: y,
-  }: {
-    tabX: number;
-    tabY: number;
-  }): ICoordinates => {
+  private getBodyXFromTabPan = (tabX: number): number => {
     // console.log(`dx from tab:`, dx);
     const { tabTextWidthsInit, tabTextWidths, index } = this.state;
 
     if (!tabTextWidthsInit) {
-      return {
-        x: dx,
-        y,
-      };
+      return tabX;
     }
 
     const relevantTabWidth =
-      dx < 0
+      tabX < 0
         ? tabTextWidths[index]
         : tabTextWidths[index - 1] || tabTextWidths[index];
-    const widthToConsider = TAB_MARGIN_LEFT + relevantTabWidth;
+    const widthToConsider = relevantTabWidth;
 
+    console.log(`widthToConsider`, widthToConsider);
     // console.log(`dx is`, dx);
 
-    const x = (WIDTH / widthToConsider) * dx;
+    const x = (WIDTH / widthToConsider) * tabX;
 
-    return {
-      x,
-      y,
-    };
+    console.log(`bodyX:`, x);
+
+    return x;
   };
 
-  handleTabLayout = (
+  private handleTabLayout = (
     {
       nativeEvent: {
         layout: { width },
@@ -445,22 +397,19 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
         `handling tabLayout: this._tabTextWidths`,
         this._tabTextWidths,
       );
+      const initialTabTextWidths = [...this._tabTextWidths];
 
-      this._tabTextWidths.forEach((num, i) => {
-        this._tabTextWidthSumNeg += num;
+      initialTabTextWidths.forEach((num, i) => {
+        this._tabTextWidthSumNeg -= num;
 
-        if (i < this._tabTextWidths.length - 1) {
-          this._tabTextWidthAccSums.push(
-            (this._tabTextWidthSumNeg + TAB_MARGIN_LEFT * (i + 1)) * -1,
-          );
+        if (i < initialTabTextWidths.length - 1) {
+          this._tabTextWidthAccSums.push(this._tabTextWidthSumNeg * (i + 1));
 
           this._tabTextWidthAccSumsPos.push(
-            this._tabTextWidthSumNeg + TAB_MARGIN_LEFT * (i + 1),
+            -this._tabTextWidthSumNeg * (i + 1),
           );
         }
       });
-
-      this._tabTextWidthSumNeg *= -1;
 
       console.log(`this._tabTextWidthAccSumsPos`, this._tabTextWidthAccSumsPos);
       console.log(`this._tabTextWidthSumNeg`, this._tabTextWidthSumNeg);
@@ -468,7 +417,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
 
       this.setState(
         {
-          tabTextWidths: this._tabTextWidths,
+          tabTextWidths: initialTabTextWidths,
           tabTextWidthAccSums: this._tabTextWidthAccSums,
           tabTextWidthAccSumsPos: this._tabTextWidthAccSumsPos,
           tabTextWidthsSumNeg: this._tabTextWidthSumNeg,
@@ -510,7 +459,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
         if (index >= colorIndex) {
           this._opacityOutputRanges[index].push(1);
         } else {
-          this._opacityOutputRanges[index].push(0);
+          this._opacityOutputRanges[index].push(0.5);
         }
       });
     });
@@ -529,23 +478,29 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     );
   };
 
-  onSwipeComplete = (direction: string, reset: boolean = false): void => {
+  private onSwipeComplete = (
+    direction: string,
+    reset: boolean = false,
+    xMultipler: number = 1,
+  ): void => {
     const { index } = this.state;
-    const tabX = reset ? 0 : this.getTabXFromIndex(index, direction);
+    const tabX = reset
+      ? 0
+      : this.getTabXFromIndex(index, direction, xMultipler);
     let newIndex = index;
 
     console.log(`Completing swipe. Setting tab container to x: ${tabX}`);
-    this._bodyPosition.setValue({ x: 0, y: 0 });
-    this._tabPosition.setValue({ x: tabX, y: 0 });
+    this._bodyPosition.setValue(0);
+    this._tabPosition.setValue(tabX);
 
     if (reset) {
       newIndex = 0;
     } else {
       if (direction === "left") {
-        newIndex += 1;
+        newIndex += 1 * xMultipler;
       } else {
         if (newIndex > 0) {
-          newIndex -= 1;
+          newIndex -= 1 * xMultipler;
         }
       }
     }
@@ -553,7 +508,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     this.setState({ swipeEnabled: true, index: newIndex });
   };
 
-  getBorderProps = () => {
+  private getBorderProps = () => {
     const {
       tabTextWidthsInit,
       tabTextWidthAccSumsPos,
@@ -562,7 +517,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     const { activeColors } = this.props;
 
     if (!tabTextWidthsInit) {
-      return 0;
+      return {};
     }
 
     // if (console.groupCollapsed) {
@@ -591,7 +546,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return { width, backgroundColor };
   };
 
-  getBodyStyle = (i: number) => {
+  private getBodyStyle = (i: number) => {
     const { index } = this.state;
 
     const isActive = i === index;
@@ -602,12 +557,12 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     const outputRange =
       offset > 0 ? [-offset, 0, offset] : [offset, 0, -offset];
 
-    const translateX = this._bodyPosition.x.interpolate({
+    const translateX = this._bodyPosition.interpolate({
       inputRange: [negOffset, 0, negOffset * -1], // [-WIDTH, 0, WIDTH]
       outputRange,
     });
 
-    const opacity = this._bodyPosition.x.interpolate({
+    const opacity = this._bodyPosition.interpolate({
       inputRange: COMMON_RANGE,
       outputRange: isActive ? [0, 1, 0] : [1, 0, 1],
     });
@@ -617,29 +572,27 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     };
   };
 
-  getTabContainerStyle = (): {
+  private getTabContainerStyle = (): {
     transform: Array<{
       translateX: Animated.AnimatedInterpolation;
     }>;
   } => {
-    const { index } = this.state;
+    const { index, tabTextWidths } = this.state;
 
-    const activeWidth = this._tabTextWidths[index] || 0;
-    const nextWidth = this._tabTextWidths[index + 1] || 0;
+    const activeWidth = tabTextWidths[index] || 0;
+    const nextWidth = tabTextWidths[index + 1] || 0;
 
-    const translateX = this._tabPosition.x.interpolate({
+    const translateX = this._tabPosition.interpolate({
       inputRange: [-activeWidth, 0, activeWidth],
       outputRange: [-activeWidth, 0, nextWidth],
     });
-
-    // console.log(`translateX`, translateX);
 
     return {
       transform: [{ translateX }],
     };
   };
 
-  handleSettingTabPosition = (
+  private handleSettingTabPosition = (
     _: NativeSyntheticEvent<any>,
     gesture: PanResponderGestureState,
   ): void => {
@@ -662,7 +615,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     }
   };
 
-  handleSettingPosition = (
+  private handleSettingPosition = (
     _event: NativeSyntheticEvent<any>,
     gesture: PanResponderGestureState,
   ): void => {
@@ -679,108 +632,109 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     }
   };
 
-  forceSwipe = (direction: string, xMultiplier: number = 1): void => {
+  private forceSwipe = (direction: string, xMultiplier: number = 1): void => {
     const { index, tabTextWidthAccSumsPos } = this.state;
     const { content } = this.props;
 
     const isRight = direction === "right";
 
-    if (!content) {
-      return;
-    }
-
-    console.log(`forceSwiping`);
+    console.log(`forceSwiping to the ${direction}`);
 
     if (
       (index === content.length - 1 && !isRight) ||
       (index === 0 && isRight)
     ) {
+      console.log(`force swiping -> resetting position`);
       return this.resetPosition();
     }
 
-    console.log(`Force swiping ${direction}`);
-
     this.setState({ swipeEnabled: false });
 
-    const x = isRight ? WIDTH * xMultiplier : -WIDTH * xMultiplier;
+    const bodyX = isRight ? WIDTH * xMultiplier : -WIDTH * xMultiplier;
+    const tabX = this.getTabXFromIndex(index, direction, xMultiplier);
+    const newGlobalTabX = isRight
+      ? tabTextWidthAccSumsPos[index - 1 * xMultiplier]
+      : tabTextWidthAccSumsPos[index + 1 * xMultiplier];
 
-    console.log(`x`, x);
-
-    const tabX = this.getTabXFromIndex(index, direction);
+    console.log(`force swiping to bodyX`, bodyX);
+    console.log(`force swiping to tabX:`, tabX);
+    console.log(`newGlobalTabX:`, newGlobalTabX);
 
     const bodyAnimation = Animated.spring(this._bodyPosition, {
-      toValue: { x, y: 0 },
+      toValue: bodyX,
       speed: SWIPE_SPEED,
       overshootClamping: true,
       useNativeDriver: true,
     });
 
-    // const tabAnimation = Animated.spring(this._tabPosition, {
-    //   toValue: { x: tabX, y: 0 },
-    //   speed: SWIPE_SPEED,
-    //   overshootClamping: true,
-    //   useNativeDriver: true,
-    // });
+    const tabAnimation = Animated.spring(this._tabPosition, {
+      toValue: tabX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
+      useNativeDriver: true,
+    });
 
-    // const borderAnimation = Animated.spring(this._animGlobalTabX, {
-    //   toValue: isRight
-    //     ? tabTextWidthAccSumsPos[index - 1]
-    //     : tabTextWidthAccSumsPos[index + 1],
-    //   speed: SWIPE_SPEED,
-    //   overshootClamping: true,
-    // });
+    const borderAnimation = Animated.spring(this._animGlobalTabX, {
+      toValue: newGlobalTabX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
+    });
 
     console.log(`About to do the animation`);
-    // Animated.parallel([bodyAnimation, tabAnimation, borderAnimation]).start(
-    //   () => {
-    //     console.log(`calling onSwipeComplete`);
-    //     this.onSwipeComplete(direction);
-    //   },
-    // );
-    bodyAnimation.start(() => {
-      console.log(`calling onSwipeComplete`);
-      this.onSwipeComplete(direction);
-    });
+    Animated.parallel([bodyAnimation, tabAnimation, borderAnimation]).start(
+      () => {
+        console.log(`calling onSwipeComplete`);
+        this.onSwipeComplete(direction, false, xMultiplier);
+      },
+    );
+    // bodyAnimation.start(() => {
+    //   console.log(`calling onSwipeComplete`);
+    //   this.onSwipeComplete(direction);
+    // });
   };
 
-  getTabXFromIndex = (indexArg: number, direction: string): number => {
-    const isRight = direction === "right";
-    const index = indexArg > 0 && isRight ? indexArg - 1 : indexArg + 1;
-    const marginConstant = index * TAB_MARGIN_LEFT * -1;
+  private getTabXFromIndex = (
+    indexArg: number,
+    direction: string,
+    xMultipler: number = 1,
+  ): number => {
+    const { tabTextWidths, tabTextWidthsInit } = this.state;
 
-    if (!this._tabTextWidthsInit) {
+    const isRight = direction === "right";
+    const index =
+      indexArg > 0 && isRight
+        ? indexArg - 1 * xMultipler
+        : indexArg + 1 * xMultipler;
+
+    if (!tabTextWidthsInit) {
       return 0;
     }
 
-    let sum = 0;
+    let tabX = 0;
 
     for (let i = 0; i < index; i += 1) {
-      sum += this._tabTextWidths[i];
+      tabX -= tabTextWidths[i];
     }
 
-    sum *= -1;
-
-    const tabX = sum + marginConstant;
-
-    // console.log(`tabX return val:`, tabX);
-    // console.log(`this._globalTabX: ${this._globalTabX}`);
+    console.log(`tabX return val:`, tabX);
+    console.log(`this._globalTabX before it is ${tabX}: ${this._globalTabX}`);
 
     this._globalTabX = tabX;
 
     return tabX;
   };
 
-  resetPosition = (): void => {
+  private resetPosition = (): void => {
     console.log(`Resetting position.`);
     const { index } = this.state;
 
     const bodyReset = Animated.spring(this._bodyPosition, {
-      toValue: { x: 0, y: 0 },
+      toValue: 0,
       useNativeDriver: true,
     });
 
     const tabReset = Animated.spring(this._tabPosition, {
-      toValue: { x: this._globalTabX, y: 0 },
+      toValue: this._globalTabX,
       useNativeDriver: true,
     });
 
@@ -791,7 +745,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     Animated.parallel([bodyReset, tabReset, globalTabXReset]).start();
   };
 
-  renderBodys = (): React.ReactNodeArray => {
+  private renderBodys = (): React.ReactNodeArray => {
     const { index } = this.state;
     const { content } = this.props;
 
@@ -821,21 +775,21 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       .reverse();
   };
 
-  handleSwipeToStart = (): void => {
+  private handleSwipeToStart = (): void => {
     const { index } = this.state;
 
     const x = WIDTH * index;
     const tabX = this.getTabXFromIndex(1, "right");
 
     const bodyAnimation = Animated.spring(this._bodyPosition, {
-      toValue: { x, y: 0 },
+      toValue: x,
       speed: SWIPE_SPEED,
       overshootClamping: true,
       useNativeDriver: true,
     });
 
     const tabAnimation = Animated.spring(this._tabPosition, {
-      toValue: { x: tabX, y: 0 },
+      toValue: tabX,
       speed: SWIPE_SPEED,
       overshootClamping: true,
       useNativeDriver: true,
@@ -854,7 +808,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     );
   };
 
-  handleTabPress = (index: number): void => {
+  private handleTabPress = (index: number): void => {
     console.log(
       `handling tab press for index ${index}. Might need to fix this for delta > 1`,
     );
@@ -864,27 +818,32 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       return;
     }
 
+    const direction = index > stateIndex ? "left" : "right";
+
     // let xMultiplier = 1;
-    const diff = index - stateIndex;
+    const diff = Math.abs(index - stateIndex);
 
     // if (index - this._index === 2) {
     //   this._index += 1;
     //   xMultiplier = 2;
     // }
 
-    this.forceSwipe("left", diff);
+    this.forceSwipe(direction, diff);
   };
 
-  getTextStyle = (i: number) => {
+  private getTextStyle = (i: number) => {
     const {
       tabTextWidthsInit,
       tabTextWidthAccSumsPos,
+      tabTextWidths,
       colorOutputRanges,
       opacityOutputRanges,
     } = this.state;
 
     if (!tabTextWidthsInit) {
-      return {};
+      return {
+        opacity: 0,
+      };
     }
 
     // if (console.groupCollapsed) {
@@ -912,24 +871,29 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
       outputRange: opacityOutputRanges[i],
     });
 
-    return { color, opacity };
+    return [
+      this.props.getTabStyle(i, tabTextWidths[i], tabTextWidths),
+      { color, opacity },
+    ];
   };
 
   render(): React.ReactNode {
+    const { index } = this.state;
+    const { titles } = this.props;
+
     return (
       <View style={localStyles.container}>
-        {/* <TabBodyScrollerHeader
-            renderNavLogo={true}
-            categoryData={this.props.categoriesData}
-            handleTabLayout={this.handleTabLayout}
-            handleTabPress={this.handleTabPress}
-            getTextStyle={this.getTextStyle}
-            getTabContainerStyle={this.getTabContainerStyle}
-            getBorderProps={this.getBorderProps}
-            handleSwipeToStart={this.handleSwipeToStart}
-            panResponder={this._tabPanResponder}
-            index={this._index}
-          /> */}
+        <TabBodyScrollerHeader
+          titles={titles}
+          handleTabLayout={this.handleTabLayout}
+          handleTabPress={this.handleTabPress}
+          getTextStyle={this.getTextStyle}
+          getTabContainerStyle={this.getTabContainerStyle}
+          getBorderProps={this.getBorderProps}
+          handleSwipeToStart={this.handleSwipeToStart}
+          panResponder={this._tabPanResponder}
+          index={index}
+        />
         <View style={localStyles.bodyContainer}>{this.renderBodys()}</View>
       </View>
     );

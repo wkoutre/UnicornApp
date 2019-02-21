@@ -1,11 +1,19 @@
 import React from "react";
-import { NativeModules, YellowBox } from "react-native";
+import { View, NativeModules, YellowBox, StyleSheet } from "react-native";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { store, persistor } from "@store";
 import { AppWithNavigationState } from "@navigation";
 import { TabBodyScroller } from "@components";
 // import { AppLoader } from "@components";
+
+const localStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: 50,
+    backgroundColor: "beige",
+  },
+});
 
 YellowBox.ignoreWarnings([
   "Require cycle:",
@@ -21,7 +29,11 @@ if (NativeModules.UIManager.setLayoutAnimationEnabledExperimental) {
 
 export default class App extends React.PureComponent {
   render() {
-    return <TabBodyScroller />;
+    return (
+      <View style={localStyles.container}>
+        <TabBodyScroller />
+      </View>
+    );
 
     return (
       <Provider store={store}>

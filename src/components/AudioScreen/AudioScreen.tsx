@@ -2,7 +2,7 @@ import * as React from "react";
 import { connect } from "react-redux";
 import { NavigationScreenProps } from "react-navigation";
 import { StyleSheet, Animated } from "react-native";
-import TrackPlayer from "react-native-track-player";
+// import TrackPlayer from "react-native-track-player";
 import { HText, IOS, Button } from "react-native-common-lib";
 import { NavLeftElement, Container } from "@common";
 import { defaultRefs, WIDTH } from "@config";
@@ -116,8 +116,8 @@ class XAudioScreen extends React.PureComponent<
   }
 
   private cleanup = (): void => {
-    TrackPlayer.reset();
-    TrackPlayer.destroy();
+    // TrackPlayer.reset();
+    // TrackPlayer.destroy();
     this.clearAnimation();
   };
 
@@ -152,38 +152,38 @@ class XAudioScreen extends React.PureComponent<
   };
 
   private initPlayer = async (): Promise<void> => {
-    TrackPlayer.registerEventHandler(this.audioEventTracker);
-    await TrackPlayer.setupPlayer();
+    // TrackPlayer.registerEventHandler(this.audioEventTracker);
+    // await TrackPlayer.setupPlayer();
 
-    const ready = await this.addTrack();
-    const duration = await TrackPlayer.getDuration();
+    // const ready = await this.addTrack();
+    // const duration = await TrackPlayer.getDuration();
 
-    this.setState({ ready, duration });
+    // this.setState({ ready, duration });
   };
 
   private addTrack = async (): Promise<boolean> => {
-    try {
-      await TrackPlayer.add({
-        id: "unicornTrack",
-        url: AUDIO_URL,
-        title: "Unicorn Music",
-        artist: "Unicorn LLC",
-        album: "while(1<2)",
-        genre: "Progressive House, Electro House",
-        date: "2014-05-20T07:00:00+00:00", // RFC 3339
-        artwork: "http://example.com/avaritia.png"
-      });
+    // try {
+    //   await TrackPlayer.add({
+    //     id: "unicornTrack",
+    //     url: AUDIO_URL,
+    //     title: "Unicorn Music",
+    //     artist: "Unicorn LLC",
+    //     album: "while(1<2)",
+    //     genre: "Progressive House, Electro House",
+    //     date: "2014-05-20T07:00:00+00:00", // RFC 3339
+    //     artwork: "http://example.com/avaritia.png"
+    //   });
 
-      return true;
-    } catch (err) {
-      console.log(`Error adding track:`, err);
+    //   return true;
+    // } catch (err) {
+    //   console.log(`Error adding track:`, err);
 
-      return false;
-    }
+    //   return false;
+    // }
   };
 
   private resetPlayer = async (): Promise<void> => {
-    await TrackPlayer.reset();
+    // await TrackPlayer.reset();
     await this.addTrack();
     this.handleAudioTap();
   };
@@ -203,34 +203,34 @@ class XAudioScreen extends React.PureComponent<
   };
 
   private handleAudioTap = async (): Promise<void> => {
-    let trackState = await TrackPlayer.getState();
+    // let trackState = await TrackPlayer.getState();
 
-    if (typeof trackState === "number") {
-      trackState = TRACK_STATE_MAP[trackState];
-    }
+    // if (typeof trackState === "number") {
+    //   trackState = TRACK_STATE_MAP[trackState];
+    // }
 
-    switch (trackState) {
-      case "stopped":
-      case "paused":
-        this.setState({ playing: true }, TrackPlayer.play);
-        break;
-      case "playing":
-        this.setState({ playing: false }, TrackPlayer.pause);
-        break;
-      default:
-        break;
-    }
+    // switch (trackState) {
+    //   case "stopped":
+    //   case "paused":
+    //     this.setState({ playing: true }, TrackPlayer.play);
+    //     break;
+    //   case "playing":
+    //     this.setState({ playing: false }, TrackPlayer.pause);
+    //     break;
+    //   default:
+    //     break;
+    // }
   };
 
   private stopAudio = () => {
-    this.setState({ playing: false }, () => {
-      if (IOS) {
-        TrackPlayer.stop();
-      } else {
-        TrackPlayer.pause();
-        TrackPlayer.seekTo(0);
-      }
-    });
+    // this.setState({ playing: false }, () => {
+    //   if (IOS) {
+    //     TrackPlayer.stop();
+    //   } else {
+    //     TrackPlayer.pause();
+    //     TrackPlayer.seekTo(0);
+    //   }
+    // });
   };
 
   private getUnicornStyle = (n: number) => {

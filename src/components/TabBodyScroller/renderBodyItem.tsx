@@ -12,7 +12,7 @@ const localStyles = StyleSheet.create({
   },
 });
 
-export const renderBodyItem = (item: string, index: number) => (
+export const renderBodyItem = (item: string, _index: number) => (
   <View style={localStyles.container}>
     <Text>{item}</Text>
   </View>

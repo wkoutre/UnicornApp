@@ -1,7 +1,6 @@
 import {
   TextStyle,
   ViewStyle,
-  Animated,
   PanResponderInstance,
   NativeSyntheticEvent,
 } from "react-native";

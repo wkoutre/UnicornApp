@@ -3,6 +3,7 @@ import {
   ViewStyle,
   PanResponderInstance,
   NativeSyntheticEvent,
+  Animated,
 } from "react-native";
 
 export interface ITabBodyScrollerProps<IContentItem> {
@@ -58,4 +59,17 @@ export interface ITabBodyScrollerHeaderProps {
   titles: string[];
   panResponder: PanResponderInstance;
   index: number;
+}
+
+export interface ITabBodyScroller {
+  _tabTextContWidths: number[];
+  _trackingTabX: number;
+  _globalTabX: number;
+  _globalBodyX: number;
+  _animGlobalTabX: Animated.Value;
+  _animGlobalTabXCol: Animated.Value;
+  _animGlobalBodyX: Animated.Value;
+  _animGlobalBodyXCol: Animated.Value;
+  _bodyPanResponder: PanResponderInstance;
+  _tabPanResponder: PanResponderInstance;
 }

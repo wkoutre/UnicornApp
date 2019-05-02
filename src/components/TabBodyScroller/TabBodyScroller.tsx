@@ -7,7 +7,6 @@ import {
   PanResponderGestureState,
   NativeSyntheticEvent,
   Dimensions,
-  PanResponderInstance,
 } from "react-native";
 import { renderBodyItem } from "./renderBodyItem";
 import { TabBodyScrollerHeader } from "./TabBodyScrollerHeader";
@@ -19,6 +18,7 @@ import {
 import {
   ITabBodyScrollerProps,
   ITabBodyScrollerState,
+  ITabBodyScroller,
 } from "./tabBodyScrollerInterfaces";
 
 const WIDTH = Dimensions.get("screen").width;
@@ -54,27 +54,13 @@ const localStyles = StyleSheet.create({
   },
 });
 
-/*
-    tslint:disable:interface-name
-  */
-interface TabBodyScroller<IContentItem> {
-  _tabTextContWidths: number[];
-  _trackingTabX: number;
-  _globalTabX: number;
-  _globalBodyX: number;
-  _animGlobalTabX: Animated.Value;
-  _animGlobalTabXCol: Animated.Value;
-  _animGlobalBodyX: Animated.Value;
-  _animGlobalBodyXCol: Animated.Value;
-  _bodyPanResponder: PanResponderInstance;
-  _tabPanResponder: PanResponderInstance;
-}
-
-class TabBodyScroller<IContentItem> extends React.PureComponent<
-  ITabBodyScrollerProps<IContentItem>,
-  ITabBodyScrollerState
-> {
-  public static defaultProps = {
+class TabBodyScroller<IContentItem>
+  extends React.PureComponent<
+    ITabBodyScrollerProps<IContentItem>,
+    ITabBodyScrollerState
+  >
+  implements ITabBodyScroller {
+  static defaultProps = {
     animTabTextStyle: localStyles.animTabText,
     tabItemBorderStyle: localStyles.tabItemBorder,
     titles: dummyData.titles,
@@ -87,121 +73,285 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     bodyContainerStyle: localStyles.bodyContainer,
   };
 
-  constructor(props: ITabBodyScrollerProps<IContentItem>) {
-    super(props);
+  _tabTextContWidths = [];
+  _globalTabX = 0;
+  _globalBodyX = 0;
+  _trackingTabX = 0;
+  _animGlobalTabX = new Animated.Value(0);
+  _animGlobalTabXCol = new Animated.Value(0);
+  _animGlobalBodyX = new Animated.Value(0);
+  _animGlobalBodyXCol = new Animated.Value(0);
 
-    this.state = {
-      swipeEnabled: true,
-      bodyIsScrolling: true,
-      tabTextWidthsInit: false,
-      tabTextWidths: [],
-      colorOutputRanges: [[]],
-      opacityOutputRanges: [[]],
-      tabTextContWidthAccSumsPos: [],
-      tabTextContWidthAccSums: [],
-      index: 0,
-      bodyContainerInputRange: props.content.map((_text, i) => WIDTH * i),
-    };
+  state = {
+    swipeEnabled: true,
+    bodyIsScrolling: true,
+    tabTextWidthsInit: false,
+    tabTextWidths: [],
+    colorOutputRanges: [[]],
+    opacityOutputRanges: [[]],
+    tabTextContWidthAccSumsPos: [],
+    tabTextContWidthAccSums: [],
+    index: 0,
+    bodyContainerInputRange: this.props.content.map((_text, i) => WIDTH * i),
+  };
 
-    this._tabTextContWidths = [];
-    this._globalTabX = 0;
-    this._globalBodyX = 0;
-    this._trackingTabX = 0;
-    this._animGlobalTabX = new Animated.Value(0);
-    this._animGlobalTabXCol = new Animated.Value(0);
-    this._animGlobalBodyX = new Animated.Value(0);
-    this._animGlobalBodyXCol = new Animated.Value(0);
+  private handleSettingTabPosition = (
+    _: NativeSyntheticEvent<any>,
+    gesture: PanResponderGestureState,
+  ): void => {
+    const {
+      tabTextWidthsInit,
+      tabTextContWidthAccSumsPos,
+      tabTextContWidthAccSums,
+      index,
+    } = this.state;
+    const { dx, vx } = gesture;
 
-    /*
-     *
-     * Create tab pan responder
-     *
-     */
+    if (!dx || !tabTextWidthsInit) {
+      return;
+    }
 
-    this._tabPanResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => {
-        // return true if user is swiping, return false if it's a single click
+    console.log(`handling setting tab position on release. dx is ${dx}`);
 
-        return !(gesture.dx === 0 && gesture.dy === 0);
-      },
-      onPanResponderMove: (_, gesture) => {
-        const { tabTextContWidthAccSumsPos, bodyIsScrolling } = this.state;
-        const { dx: tabX } = gesture;
+    const TAB_SWIPE_THRESHOLD = WIDTH * 0.2 * X_SWIPE_THRESHOLD_COEFF;
 
-        if (bodyIsScrolling) {
-          this.setState({ bodyIsScrolling: false });
-        }
+    if (dx < -TAB_SWIPE_THRESHOLD || vx < -VELOCITY_THRESHOLD) {
+      const startingPos = tabTextContWidthAccSums[index];
+      const newSnapshotPos = startingPos + dx;
+      const isOneAway =
+        index + 1 < tabTextContWidthAccSums.length &&
+        newSnapshotPos < startingPos &&
+        newSnapshotPos > tabTextContWidthAccSums[index + 1];
 
-        /*
-        For if we want to enable tab flick-scrolling OR pan scrolling more than (this._index +- 1)
+      console.log(`isOneAway:`, isOneAway);
 
-          tabX: gesture.dx,
-          tabY,
-        });
-      */
+      if (vx < -VELOCITY_THRESHOLD && isOneAway) {
+        this.forceSwipe("left");
+      } else {
+        const forcedIndex = findRelevantValFromSwipe(
+          tabTextContWidthAccSumsPos,
+          "left",
+          this._trackingTabX,
+          true,
+        );
 
-        const globalAnimX = tabX * -1 + this._globalTabX * -1;
+        console.log(`forcedIndex going left:`, forcedIndex);
+        this.forceSwipe("left", 1, forcedIndex);
+      }
+    } else if (dx > TAB_SWIPE_THRESHOLD || vx > VELOCITY_THRESHOLD) {
+      const startingPos = tabTextContWidthAccSums[index];
+      const newSnapshotPos = startingPos + dx;
+      const isOneAway =
+        index - 1 >= 0 &&
+        newSnapshotPos > startingPos &&
+        newSnapshotPos < tabTextContWidthAccSums[index - 1];
 
-        if (
-          globalAnimX > -OVERSHOOT_VAL &&
-          globalAnimX <
-            tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] +
-              OVERSHOOT_VAL
-        ) {
-          //   console.log(`Setting tab Animated.Values to ${globalAnimX}`);
-          this._animGlobalTabX.setValue(globalAnimX);
-          this._animGlobalTabXCol.setValue(globalAnimX);
-          this._trackingTabX = globalAnimX;
-        }
-      },
-      onPanResponderRelease: this.handleSettingTabPosition,
+      console.log(`isOneAway:`, isOneAway);
+
+      if (vx > VELOCITY_THRESHOLD && isOneAway) {
+        this.forceSwipe("right");
+      } else {
+        const forcedIndex = findRelevantValFromSwipe(
+          tabTextContWidthAccSumsPos,
+          "right",
+          this._trackingTabX,
+          true,
+        );
+
+        console.log(`forcedIndex going right:`, forcedIndex);
+        this.forceSwipe("right", 1, forcedIndex);
+      }
+    } else {
+      this.resetPosition();
+    }
+  };
+
+  private handleSettingPosition = (
+    _event: NativeSyntheticEvent<any>,
+    gesture: PanResponderGestureState,
+  ): void => {
+    const { dx, vx } = gesture;
+
+    console.log(`handling setting body position on release`);
+
+    if (dx < -SWIPE_THRESHOLD || vx < -VELOCITY_THRESHOLD) {
+      this.forceSwipe("left");
+    } else if (dx > SWIPE_THRESHOLD || vx > VELOCITY_THRESHOLD) {
+      this.forceSwipe("right");
+    } else {
+      this.resetPosition();
+    }
+  };
+
+  private forceSwipe = (
+    direction: string,
+    xMultiplier: number = 1,
+    forceIndex?: number,
+  ): void => {
+    const { index, tabTextContWidthAccSumsPos } = this.state;
+    const { content } = this.props;
+
+    const isRight = direction === "right";
+
+    console.log(
+      `forceSwiping to the ${direction} with forceIndex of ${forceIndex}`,
+    );
+
+    if (
+      (index === content.length - 1 && !isRight) ||
+      (index === 0 && isRight)
+    ) {
+      console.log(`force swiping -> resetting position`);
+      return this.resetPosition();
+    }
+
+    this.setState({ swipeEnabled: false });
+
+    const bodyX = isRight ? WIDTH * xMultiplier : -WIDTH * xMultiplier;
+    const { tabX, newIndex } = this.getTabXAndNewIndexFromCurrIndex(
+      index,
+      direction,
+      xMultiplier,
+      forceIndex,
+    );
+
+    const newGlobalTabX = tabTextContWidthAccSumsPos[newIndex * xMultiplier];
+
+    const newGlobalBodyX = WIDTH * (newIndex * xMultiplier);
+
+    if (console.groupCollapsed) {
+      console.groupCollapsed("forceSwipe results:");
+      console.log(`bodyX`, bodyX);
+      console.log(`tabX:`, tabX);
+      console.log(`newGlobalTabX:`, newGlobalTabX);
+      console.log(`newGlobalBodyX:`, newGlobalBodyX);
+      console.groupEnd("");
+    }
+
+    this._globalBodyX = -newGlobalBodyX;
+
+    const tabColorAnimation = Animated.spring(this._animGlobalTabXCol, {
+      toValue: newGlobalTabX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
+    });
+    const tabAnimation = Animated.spring(this._animGlobalTabX, {
+      toValue: newGlobalTabX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
+      useNativeDriver: true,
     });
 
-    /*
-     *
-     * Create body pan responder
-     *
-     */
-    this._bodyPanResponder = PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_event, gesture) => {
-        const { dx, dy, vy } = gesture;
-
-        if (
-          (dx < -2 || dx > 2) && // low dx
-          (dy > -5 || dy < 5) && // accounts for +- of gesture direction
-          (vy > -VELOCITY_THRESHOLD && vy < VELOCITY_THRESHOLD) // disable when vy is high
-        ) {
-          return true;
-        }
-
-        return false;
-      },
-      onPanResponderMove: (_event, gesture) => {
-        const { content } = this.props;
-        const { tabTextWidthsInit, tabTextContWidthAccSumsPos } = this.state;
-        const { dx: bodyX } = gesture;
-        const globalAnimBodyX = bodyX * -1 + this._globalBodyX * -1;
-
-        const totalWidth =
-          WIDTH * content.length - 1 - WIDTH / 2 + OVERSHOOT_VAL;
-        const upperLimit = tabTextWidthsInit
-          ? totalWidth -
-            tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] /
-              2
-          : totalWidth;
-
-        if (globalAnimBodyX > -OVERSHOOT_VAL && globalAnimBodyX < upperLimit) {
-          //   console.log(`Setting body Animated.Values to:`, globalAnimBodyX);
-
-          this._animGlobalBodyX.setValue(globalAnimBodyX);
-          this._animGlobalBodyXCol.setValue(globalAnimBodyX);
-        }
-      },
-      onPanResponderRelease: this.handleSettingPosition,
+    const bodyColorAnimation = Animated.spring(this._animGlobalBodyXCol, {
+      toValue: newGlobalBodyX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
     });
-  }
+    const bodyAnimation = Animated.spring(this._animGlobalBodyX, {
+      toValue: newGlobalBodyX,
+      speed: SWIPE_SPEED,
+      overshootClamping: true,
+      useNativeDriver: true,
+    });
+
+    console.log(`About to do the animation`);
+    Animated.parallel([
+      tabAnimation,
+      tabColorAnimation,
+      bodyAnimation,
+      bodyColorAnimation,
+    ]).start(() => {
+      console.log(`calling onSwipeComplete`);
+      this.onSwipeComplete(newIndex);
+    });
+  };
+
+  /*
+   *
+   * Create tab pan responder
+   *
+   */
+  _tabPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gesture) => {
+      // return true if user is swiping, return false if it's a single click
+
+      return !(gesture.dx === 0 && gesture.dy === 0);
+    },
+    onPanResponderMove: (_, gesture) => {
+      const { tabTextContWidthAccSumsPos, bodyIsScrolling } = this.state;
+      const { dx: tabX } = gesture;
+
+      if (bodyIsScrolling) {
+        this.setState({ bodyIsScrolling: false });
+      }
+
+      /*
+      For if we want to enable tab flick-scrolling OR pan scrolling more than (this._index +- 1)
+
+        tabX: gesture.dx,
+        tabY,
+      });
+    */
+
+      const globalAnimX = tabX * -1 + this._globalTabX * -1;
+
+      if (
+        globalAnimX > -OVERSHOOT_VAL &&
+        globalAnimX <
+          tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] +
+            OVERSHOOT_VAL
+      ) {
+        //   console.log(`Setting tab Animated.Values to ${globalAnimX}`);
+        this._animGlobalTabX.setValue(globalAnimX);
+        this._animGlobalTabXCol.setValue(globalAnimX);
+        this._trackingTabX = globalAnimX;
+      }
+    },
+    onPanResponderRelease: this.handleSettingTabPosition,
+  });
+
+  /*
+   *
+   * Create body pan responder
+   *
+   */
+  _bodyPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gesture) => {
+      const { dx, dy, vy } = gesture;
+
+      if (
+        (dx < -2 || dx > 2) && // low dx
+        (dy > -5 || dy < 5) && // accounts for +- of gesture direction
+        (vy > -VELOCITY_THRESHOLD && vy < VELOCITY_THRESHOLD) // disable when vy is high
+      ) {
+        return true;
+      }
+
+      return false;
+    },
+    onPanResponderMove: (_event, gesture) => {
+      const { content } = this.props;
+      const { tabTextWidthsInit, tabTextContWidthAccSumsPos } = this.state;
+      const { dx: bodyX } = gesture;
+      const globalAnimBodyX = bodyX * -1 + this._globalBodyX * -1;
+
+      const totalWidth = WIDTH * content.length - 1 - WIDTH / 2 + OVERSHOOT_VAL;
+      const upperLimit = tabTextWidthsInit
+        ? totalWidth -
+          tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] / 2
+        : totalWidth;
+
+      if (globalAnimBodyX > -OVERSHOOT_VAL && globalAnimBodyX < upperLimit) {
+        //   console.log(`Setting body Animated.Values to:`, globalAnimBodyX);
+
+        this._animGlobalBodyX.setValue(globalAnimBodyX);
+        this._animGlobalBodyXCol.setValue(globalAnimBodyX);
+      }
+    },
+    onPanResponderRelease: this.handleSettingPosition,
+  });
 
   private handleTabLayout = (
     {
@@ -395,177 +545,6 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
     return {
       transform: [{ translateX }],
     };
-  };
-
-  private handleSettingTabPosition = (
-    _: NativeSyntheticEvent<any>,
-    gesture: PanResponderGestureState,
-  ): void => {
-    const {
-      tabTextWidthsInit,
-      tabTextContWidthAccSumsPos,
-      tabTextContWidthAccSums,
-      index,
-    } = this.state;
-    const { dx, vx } = gesture;
-
-    if (!dx || !tabTextWidthsInit) {
-      return;
-    }
-
-    console.log(`handling setting tab position on release. dx is ${dx}`);
-
-    const TAB_SWIPE_THRESHOLD = WIDTH * 0.2 * X_SWIPE_THRESHOLD_COEFF;
-
-    if (dx < -TAB_SWIPE_THRESHOLD || vx < -VELOCITY_THRESHOLD) {
-      const startingPos = tabTextContWidthAccSums[index];
-      const newSnapshotPos = startingPos + dx;
-      const isOneAway =
-        index + 1 < tabTextContWidthAccSums.length &&
-        newSnapshotPos < startingPos &&
-        newSnapshotPos > tabTextContWidthAccSums[index + 1];
-
-      console.log(`isOneAway:`, isOneAway);
-
-      if (vx < -VELOCITY_THRESHOLD && isOneAway) {
-        this.forceSwipe("left");
-      } else {
-        const forcedIndex = findRelevantValFromSwipe(
-          tabTextContWidthAccSumsPos,
-          "left",
-          this._trackingTabX,
-          true,
-        );
-
-        console.log(`forcedIndex going left:`, forcedIndex);
-        this.forceSwipe("left", 1, forcedIndex);
-      }
-    } else if (dx > TAB_SWIPE_THRESHOLD || vx > VELOCITY_THRESHOLD) {
-      const startingPos = tabTextContWidthAccSums[index];
-      const newSnapshotPos = startingPos + dx;
-      const isOneAway =
-        index - 1 >= 0 &&
-        newSnapshotPos > startingPos &&
-        newSnapshotPos < tabTextContWidthAccSums[index - 1];
-
-      console.log(`isOneAway:`, isOneAway);
-
-      if (vx > VELOCITY_THRESHOLD && isOneAway) {
-        this.forceSwipe("right");
-      } else {
-        const forcedIndex = findRelevantValFromSwipe(
-          tabTextContWidthAccSumsPos,
-          "right",
-          this._trackingTabX,
-          true,
-        );
-
-        console.log(`forcedIndex going right:`, forcedIndex);
-        this.forceSwipe("right", 1, forcedIndex);
-      }
-    } else {
-      this.resetPosition();
-    }
-  };
-
-  private handleSettingPosition = (
-    _event: NativeSyntheticEvent<any>,
-    gesture: PanResponderGestureState,
-  ): void => {
-    const { dx, vx } = gesture;
-
-    console.log(`handling setting body position on release`);
-
-    if (dx < -SWIPE_THRESHOLD || vx < -VELOCITY_THRESHOLD) {
-      this.forceSwipe("left");
-    } else if (dx > SWIPE_THRESHOLD || vx > VELOCITY_THRESHOLD) {
-      this.forceSwipe("right");
-    } else {
-      this.resetPosition();
-    }
-  };
-
-  private forceSwipe = (
-    direction: string,
-    xMultiplier: number = 1,
-    forceIndex?: number,
-  ): void => {
-    const { index, tabTextContWidthAccSumsPos } = this.state;
-    const { content } = this.props;
-
-    const isRight = direction === "right";
-
-    console.log(
-      `forceSwiping to the ${direction} with forceIndex of ${forceIndex}`,
-    );
-
-    if (
-      (index === content.length - 1 && !isRight) ||
-      (index === 0 && isRight)
-    ) {
-      console.log(`force swiping -> resetting position`);
-      return this.resetPosition();
-    }
-
-    this.setState({ swipeEnabled: false });
-
-    const bodyX = isRight ? WIDTH * xMultiplier : -WIDTH * xMultiplier;
-    const { tabX, newIndex } = this.getTabXAndNewIndexFromCurrIndex(
-      index,
-      direction,
-      xMultiplier,
-      forceIndex,
-    );
-
-    const newGlobalTabX = tabTextContWidthAccSumsPos[newIndex * xMultiplier];
-
-    const newGlobalBodyX = WIDTH * (newIndex * xMultiplier);
-
-    if (console.groupCollapsed) {
-      console.groupCollapsed("forceSwipe results:");
-      console.log(`bodyX`, bodyX);
-      console.log(`tabX:`, tabX);
-      console.log(`newGlobalTabX:`, newGlobalTabX);
-      console.log(`newGlobalBodyX:`, newGlobalBodyX);
-      console.groupEnd("");
-    }
-
-    this._globalBodyX = -newGlobalBodyX;
-
-    const tabColorAnimation = Animated.spring(this._animGlobalTabXCol, {
-      toValue: newGlobalTabX,
-      speed: SWIPE_SPEED,
-      overshootClamping: true,
-    });
-    const tabAnimation = Animated.spring(this._animGlobalTabX, {
-      toValue: newGlobalTabX,
-      speed: SWIPE_SPEED,
-      overshootClamping: true,
-      useNativeDriver: true,
-    });
-
-    const bodyColorAnimation = Animated.spring(this._animGlobalBodyXCol, {
-      toValue: newGlobalBodyX,
-      speed: SWIPE_SPEED,
-      overshootClamping: true,
-    });
-    const bodyAnimation = Animated.spring(this._animGlobalBodyX, {
-      toValue: newGlobalBodyX,
-      speed: SWIPE_SPEED,
-      overshootClamping: true,
-      useNativeDriver: true,
-    });
-
-    console.log(`About to do the animation`);
-    Animated.parallel([
-      tabAnimation,
-      tabColorAnimation,
-      bodyAnimation,
-      bodyColorAnimation,
-    ]).start(() => {
-      console.log(`calling onSwipeComplete`);
-      this.onSwipeComplete(newIndex);
-    });
   };
 
   private getTabXAndNewIndexFromCurrIndex = (

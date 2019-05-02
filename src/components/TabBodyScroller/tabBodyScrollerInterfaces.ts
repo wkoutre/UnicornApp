@@ -15,6 +15,7 @@ export interface ITabBodyScrollerProps<IContentItem> {
   animTabTextStyle: TextStyle;
   tabItemBorderStyle: ViewStyle;
   bodyContainerStyle: ViewStyle;
+  tabTextContainerStyle: ViewStyle;
   renderBodyItem: (contentItem: IContentItem, index: number) => React.ReactNode;
   getTabTextContainerStyle: (
     index: number,

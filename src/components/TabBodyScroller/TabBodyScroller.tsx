@@ -63,6 +63,7 @@ class TabBodyScroller<IContentItem>
   static defaultProps = {
     animTabTextStyle: localStyles.animTabText,
     tabItemBorderStyle: localStyles.tabItemBorder,
+    tabTextContainerStyle: {},
     titles: dummyData.titles,
     content: dummyData.content,
     activeColors: dummyData.activeColors,
@@ -511,20 +512,23 @@ class TabBodyScroller<IContentItem>
     };
   };
 
-  private getTabTextContainerStyle = (tabIndex: number) => {
+  private _getTabTextContainerStyle = (tabIndex: number) => {
     const { tabTextWidthsInit, tabTextWidths } = this.state;
-    const { titles, tabMarginHorizontal } = this.props;
+    const { titles, tabMarginHorizontal, tabTextContainerStyle } = this.props;
 
     if (!tabTextWidthsInit) {
       return {};
     }
 
-    return getTabTextContainerStyle(
-      tabIndex,
-      tabTextWidths[tabIndex],
-      titles,
-      tabMarginHorizontal,
-    );
+    return [
+      tabTextContainerStyle,
+      getTabTextContainerStyle(
+        tabIndex,
+        tabTextWidths[tabIndex],
+        titles,
+        tabMarginHorizontal,
+      ),
+    ];
   };
 
   private getHeaderContainerStyle = () => {
@@ -721,7 +725,7 @@ class TabBodyScroller<IContentItem>
           handleTabLayout={this.handleTabLayout}
           handleTabPress={this.handleTabPress}
           getAnimTabTextStyle={this.getAnimTabTextStyle}
-          getTabTextContainerStyle={this.getTabTextContainerStyle}
+          getTabTextContainerStyle={this._getTabTextContainerStyle}
           getHeaderContainerStyle={this.getHeaderContainerStyle}
           getTabItemBorderStyle={this.getTabItemBorderStyle}
           handleSwipeToStart={this.handleSwipeToStart}

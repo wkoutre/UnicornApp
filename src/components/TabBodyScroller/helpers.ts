@@ -9,6 +9,8 @@ export const dummyData = {
   inactiveColors: ["gray", "gray", "gray", "gray"],
 };
 
+const commonTabTextContStyle = { alignItems: "center" };
+
 export const getTabTextContainerStyle = (
   index: number,
   tabWidth: number,
@@ -17,6 +19,7 @@ export const getTabTextContainerStyle = (
 ) => {
   if (index === 0) {
     return {
+      ...commonTabTextContStyle,
       marginLeft: WIDTH / 2 - tabWidth / 2,
       marginRight: marginHorizontal,
     };
@@ -24,12 +27,13 @@ export const getTabTextContainerStyle = (
 
   if (index === titles.length - 1) {
     return {
+      ...commonTabTextContStyle,
       marginLeft: marginHorizontal,
       marginRight: WIDTH / 2 - tabWidth / 2,
     };
   }
 
-  return { marginHorizontal };
+  return { ...commonTabTextContStyle, marginHorizontal };
 };
 
 export const findRelevantValFromSwipe = (

@@ -1,13 +1,6 @@
 import * as React from "react";
-import { NativeSyntheticEvent, Animated, TouchableOpacity } from "react-native";
-
-interface IScrollerTabItemProps {
-  getTextStyle: (i: number) => any;
-  handleTabPress: (i: number) => void;
-  handleTabLayout: (event: NativeSyntheticEvent<any>, i: number) => void;
-  i: number;
-  title: string;
-}
+import { NativeSyntheticEvent, Animated, View } from "react-native";
+import { IScrollerTabItemProps } from "./tabBodyScrollerInterfaces";
 
 class ScrollerTabItem extends React.Component<IScrollerTabItemProps, {}> {
   private handleTabLayout = (e: NativeSyntheticEvent<any>) => {
@@ -23,17 +16,25 @@ class ScrollerTabItem extends React.Component<IScrollerTabItemProps, {}> {
   };
 
   render(): React.ReactNode {
-    const { title, i, getTextStyle } = this.props;
+    const {
+      title,
+      i,
+      getAnimTabTextStyle,
+      getTabTextContainerStyle,
+      getTabItemBorderStyle,
+    } = this.props;
 
     return (
-      <TouchableOpacity activeOpacity={0.7} onPress={this.handleTabPress}>
+      <View style={getTabTextContainerStyle(i)}>
         <Animated.Text
+          onPress={this.handleTabPress}
           onLayout={this.handleTabLayout}
-          style={[getTextStyle(i), { backgroundColor: "violet" }]}
+          style={getAnimTabTextStyle(i)}
         >
           {title}
         </Animated.Text>
-      </TouchableOpacity>
+        <Animated.View style={getTabItemBorderStyle(i)} />
+      </View>
     );
   }
 }

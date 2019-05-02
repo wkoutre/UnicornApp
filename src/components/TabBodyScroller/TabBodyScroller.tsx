@@ -148,7 +148,7 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
             tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] +
               25
         ) {
-          console.log(`Setting tab Animated.Values to ${globalAnimX}`);
+          //   console.log(`Setting tab Animated.Values to ${globalAnimX}`);
           this._animGlobalTabX.setValue(globalAnimX);
           this._animGlobalTabXCol.setValue(globalAnimX);
           this._trackingTabX = globalAnimX;

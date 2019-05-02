@@ -22,10 +22,11 @@ import {
 } from "./tabBodyScrollerInterfaces";
 
 const WIDTH = Dimensions.get("screen").width;
-const X_SWIPE_THRESHOLD_COEFF: number = 0.5;
-const SWIPE_THRESHOLD: number = WIDTH * X_SWIPE_THRESHOLD_COEFF;
-const SWIPE_SPEED: number = 12; // Animated.spring
-const VELOCITY_THRESHOLD: number = 0.55;
+const X_SWIPE_THRESHOLD_COEFF = 0.5;
+const SWIPE_THRESHOLD = WIDTH * X_SWIPE_THRESHOLD_COEFF;
+const SWIPE_SPEED = 12; // Animated.spring
+const VELOCITY_THRESHOLD = 0.55;
+const OVERSHOOT_VAL = 25;
 
 const localStyles = StyleSheet.create({
   container: {
@@ -143,10 +144,10 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
         const globalAnimX = tabX * -1 + this._globalTabX * -1;
 
         if (
-          globalAnimX > -25 &&
+          globalAnimX > -OVERSHOOT_VAL &&
           globalAnimX <
             tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] +
-              25
+              OVERSHOOT_VAL
         ) {
           //   console.log(`Setting tab Animated.Values to ${globalAnimX}`);
           this._animGlobalTabX.setValue(globalAnimX);
@@ -183,14 +184,15 @@ class TabBodyScroller<IContentItem> extends React.PureComponent<
         const { dx: bodyX } = gesture;
         const globalAnimBodyX = bodyX * -1 + this._globalBodyX * -1;
 
-        const totalWidth = WIDTH * content.length - 1 - WIDTH / 2 + 25;
+        const totalWidth =
+          WIDTH * content.length - 1 - WIDTH / 2 + OVERSHOOT_VAL;
         const upperLimit = tabTextWidthsInit
           ? totalWidth -
             tabTextContWidthAccSumsPos[tabTextContWidthAccSumsPos.length - 1] /
               2
           : totalWidth;
 
-        if (globalAnimBodyX > -25 && globalAnimBodyX < upperLimit) {
+        if (globalAnimBodyX > -OVERSHOOT_VAL && globalAnimBodyX < upperLimit) {
           //   console.log(`Setting body Animated.Values to:`, globalAnimBodyX);
 
           this._animGlobalBodyX.setValue(globalAnimBodyX);
